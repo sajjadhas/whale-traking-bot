@@ -1,1 +1,1 @@
-worker: python3 whale_perf_bot.py
+worker: python3 whale_shot_bot.py
