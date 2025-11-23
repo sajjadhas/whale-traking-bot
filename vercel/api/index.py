@@ -1,5 +1,7 @@
-
-import os, re, io, time
+import os
+import re
+import io
+import time
 from PIL import Image
 import requests
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
@@ -12,9 +14,12 @@ from telegram.ext import (
     filters,
     ConversationHandler
 )
+from telegram.ext import ApplicationBuilder
 
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 ASK_ADDR = 1
+
+# ---------- Utility Functions ----------
 
 def _norm(txt: str) -> str:
     txt = (txt or "").strip()
@@ -40,6 +45,8 @@ def _fetch_and_crop_bottom(url: str, bottom_ratio: float = 0.40):
             return buf.read()
         time.sleep(2)
     return None
+
+# ---------- Bot Handlers ----------
 
 async def cmd_start(u: Update, c: ContextTypes.DEFAULT_TYPE):
     kb = [[InlineKeyboardButton("Tracking whale", callback_data="track")]]
@@ -67,11 +74,21 @@ async def on_addr(u: Update, c: ContextTypes.DEFAULT_TYPE):
 
     return ConversationHandler.END
 
-async def start_bot():
-    if not BOT_TOKEN:
-        return {"status": "error", "message": "BOT_TOKEN missing"}
+# ---------- Vercel HTTP handler ----------
 
-    app = Application.builder().token(BOT_TOKEN).build()
+async def handler(request):
+    if request.method != "POST":
+        return {"status": "ok"}
+
+    body = await request.json()
+    update = Update.de_json(body, app.bot)
+    await app.process_update(update)
+    return {"status": "processed"}
+
+# ---------- Initialize App ----------
+
+def build_app():
+    app = ApplicationBuilder().token(BOT_TOKEN).build()
 
     conv = ConversationHandler(
         entry_points=[CallbackQueryHandler(on_menu, pattern="^track$")],
@@ -82,12 +99,6 @@ async def start_bot():
 
     app.add_handler(CommandHandler("start", cmd_start))
     app.add_handler(conv)
+    return app
 
-    await app.initialize()
-    await app.start()
-    await app.updater.start_polling(drop_pending_updates=True)
-
-    return {"status": "running"}
-
-async def handler(request):
-    return await start_bot()
+app = build_app()
