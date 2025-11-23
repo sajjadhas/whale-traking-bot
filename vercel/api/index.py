@@ -1,4 +1,3 @@
-
 import os, re, io, time
 from PIL import Image
 import requests
@@ -6,6 +5,7 @@ from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, ContextTypes, filters, ConversationHandler
 
 BOT_TOKEN = os.getenv("BOT_TOKEN")
+WEBHOOK_URL = os.getenv("WEBHOOK_URL")  # This will be your Vercel URL + "/api/index"
 
 ASK_ADDR = 1
 
@@ -60,28 +60,33 @@ async def on_addr(u: Update, c: ContextTypes.DEFAULT_TYPE):
 
     return ConversationHandler.END
 
-async def start_bot():
-    if not BOT_TOKEN:
-        return {"status": "error", "message": "BOT_TOKEN is missing"}
 
-    app = Application.builder().token(BOT_TOKEN).build()
+# ------------ VERCEL WEBHOOK MODE --------------
 
-    conv = ConversationHandler(
-        entry_points=[CallbackQueryHandler(on_menu, pattern="^track$")],
-        states={ASK_ADDR: [MessageHandler(filters.TEXT & ~filters.COMMAND, on_addr)]},
-        fallbacks=[CommandHandler("start", cmd_start)],
-        allow_reentry=True
-    )
+application = Application.builder().token(BOT_TOKEN).build()
 
-    app.add_handler(CommandHandler("start", cmd_start))
-    app.add_handler(conv)
+conv = ConversationHandler(
+    entry_points=[CallbackQueryHandler(on_menu, pattern="^track$")],
+    states={ASK_ADDR: [MessageHandler(filters.TEXT & ~filters.COMMAND, on_addr)]},
+    fallbacks=[CommandHandler("start", cmd_start)],
+    allow_reentry=True
+)
 
-    await app.initialize()
-    await app.start()
-    await app.updater.start_polling(drop_pending_updates=True)
+application.add_handler(CommandHandler("start", cmd_start))
+application.add_handler(conv)
 
-    return {"status": "running"}
 
-# Vercel entry point
 async def handler(request):
-    return await start_bot()
+    """This is the Vercel Webhook endpoint"""
+    if request.method == "POST":
+        body = await request.json()
+        await application.initialize()
+        await application.process_update(Update.de_json(body, application.bot))
+        return {"ok": True}
+
+    # For setup webhook
+    if WEBHOOK_URL:
+        await application.bot.set_webhook(f"{WEBHOOK_URL}/api/index")
+        return {"status": "webhook_set"}
+
+    return {"status": "ready"}
