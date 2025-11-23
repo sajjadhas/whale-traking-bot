@@ -2,7 +2,8 @@
   "version": 2,
   "functions": {
     "api/index.py": {
-      "runtime": "python3.9"
+      "runtime": "vercel-python@0.6.0",
+      "memory": 128
     }
   },
   "routes": [
